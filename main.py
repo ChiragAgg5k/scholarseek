@@ -3,7 +3,6 @@ from scholarly import scholarly
 from collections import defaultdict
 import time
 from transformers import pipeline
-import requests
 
 def search_authors(author_name):
     search_query = scholarly.search_author(author_name)
@@ -21,7 +20,6 @@ def get_author_publications(author):
     try:
         author = scholarly.fill(author, sections=["publications"])
         publications = author["publications"]
-        print("Publications:", publications)
         author_details = {
             "name": author["name"],
             "affiliation": author.get("affiliation", "Unknown affiliation"),
@@ -50,15 +48,17 @@ def process_publications(publications):
         year = extract_year(pub)
         title = pub.get("bib", {}).get("title", "Untitled")
         num_citations = pub.get("num_citations", 0)
-        abstract = pub.get("bib", {}).get("abstract", "")
-        all_pubs[year].append((title, num_citations, abstract))
+        all_pubs[year].append((title, num_citations, pub))  # Store the entire pub object
     return all_pubs
 
 def generate_summary(abstract):
-    print("Abstract:", abstract)
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
     summary = summarizer(abstract, max_length=150, min_length=50, do_sample=False)[0]["summary_text"]
     return summary
+
+def get_abstract(pub):
+    filled_pub = scholarly.fill(pub)
+    return filled_pub.get("bib", {}).get("abstract", "No abstract available")
 
 def display_publications(all_pubs):
     st.subheader("Publications")
@@ -67,7 +67,7 @@ def display_publications(all_pubs):
     ):
         st.write(f"Year: {year}")
         pubs = sorted(pubs, key=lambda x: x[1], reverse=True)
-        for index, (title, num_citations, abstract) in enumerate(pubs):
+        for index, (title, num_citations, pub) in enumerate(pubs):
             st.write(f"- {title} | {num_citations} citations")
             
             button_key = f"summary_button:{year}:{index}"
@@ -75,7 +75,8 @@ def display_publications(all_pubs):
             
             if st.button(f"Show Summary", key=button_key):
                 if summary_key not in st.session_state:
-                    with st.spinner("Generating summary..."):
+                    with st.spinner("Fetching abstract and generating summary..."):
+                        abstract = get_abstract(pub)
                         summary = generate_summary(abstract)
                         st.session_state[summary_key] = summary
             
