@@ -53,7 +53,14 @@ def process_publications(publications):
 
 def generate_summary(abstract):
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-    summary = summarizer(abstract, max_length=150, min_length=50, do_sample=False)[0]["summary_text"]
+    prompt = "Summarize this research paper: "
+    input_text = prompt + abstract
+    summary = summarizer(input_text, max_length=150, min_length=50, do_sample=False)[0]["summary_text"]
+    
+    # Post-process the summary to ensure it starts with "This research paper discusses"
+    if not summary.startswith("This research paper discusses"):
+        summary = "This research paper discusses " + summary[0].lower() + summary[1:]
+    
     return summary
 
 def get_abstract(pub):
@@ -89,9 +96,11 @@ def main():
     st.set_page_config(page_title="Scholar Seek", page_icon="📚")
     st.title("Scholar Seek")
 
-    author_name = st.text_input("Enter professor's name:")
+    with st.form(key='search_form'):        
+        author_name = st.text_input("Enter professor's name:")
+        submit_button = st.form_submit_button(label='Search')
 
-    if st.button("Search") or st.session_state.get("search", False):
+    if submit_button or st.session_state.get("search", False):
         st.session_state["search"] = True
 
         if not author_name:
